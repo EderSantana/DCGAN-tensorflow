@@ -4,6 +4,7 @@ import time
 from glob import glob
 import tensorflow as tf
 from six.moves import xrange
+from ponynet import ponynet
 
 from ops import *
 from utils import *
@@ -92,7 +93,7 @@ class DCGAN(object):
 
         self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
         self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
-                                                    
+
         self.d_loss = self.d_loss_real + self.d_loss_fake
 
         self.g_loss_sum = tf.scalar_summary("g_loss", self.g_loss)
@@ -117,7 +118,7 @@ class DCGAN(object):
         tf.initialize_all_variables().run()
 
         self.saver = tf.train.Saver()
-        self.g_sum = tf.merge_summary([self.z_sum, self.d__sum, 
+        self.g_sum = tf.merge_summary([self.z_sum, self.d__sum,
             self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
         self.d_sum = tf.merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
         self.writer = tf.train.SummaryWriter("./logs", self.sess.graph_def)
@@ -219,20 +220,24 @@ class DCGAN(object):
             self.h0 = tf.reshape(self.z_, [-1, 4, 4, self.gf_dim * 8])
             h0 = tf.nn.relu(self.g_bn0(self.h0))
 
-            self.h1, self.h1_w, self.h1_b = deconv2d(h0, 
-                [self.batch_size, 8, 8, self.gf_dim*4], name='g_h1', with_w=True)
-            h1 = tf.nn.relu(self.g_bn1(self.h1))
+            self.h1, self.h1_w, self.h1_b = deconv2d(h0,
+                [self.batch_size, 4, 4, 4*self.gf_dim*4], k_w=2, k_h=2, d_h=1, d_w=1, name='g_h1', with_w=True)
+            h1 = tf.depth_to_space(self.h1, 2)
+            h1 = tf.nn.relu(self.g_bn1(h1))
 
             h2, self.h2_w, self.h2_b = deconv2d(h1,
-                [self.batch_size, 16, 16, self.gf_dim*2], name='g_h2', with_w=True)
+                [self.batch_size, 8, 8, 4*self.gf_dim*2], d_h=1, d_w=1, name='g_h2', with_w=True)
+            h2 = tf.depth_to_space(h2, 2)
             h2 = tf.nn.relu(self.g_bn2(h2))
 
             h3, self.h3_w, self.h3_b = deconv2d(h2,
-                [self.batch_size, 32, 32, self.gf_dim*1], name='g_h3', with_w=True)
+                [self.batch_size, 16, 16, 4*self.gf_dim*1], d_h=1, d_w=1, name='g_h3', with_w=True)
+            h3 = tf.depth_to_space(h3, 2)
             h3 = tf.nn.relu(self.g_bn3(h3))
 
             h4, self.h4_w, self.h4_b = deconv2d(h3,
-                [self.batch_size, 64, 64, 3], name='g_h4', with_w=True)
+                [self.batch_size, 32, 32, 4*3], d_h=1, d_w=1, name='g_h4', with_w=True)
+            h4 = tf.depth_to_space(h4, 2)
 
             return tf.nn.tanh(h4)
         else:
@@ -260,16 +265,20 @@ class DCGAN(object):
                             [-1, 4, 4, self.gf_dim * 8])
             h0 = tf.nn.relu(self.g_bn0(h0, train=False))
 
-            h1 = deconv2d(h0, [self.batch_size, 8, 8, self.gf_dim*4], name='g_h1')
+            h1 = deconv2d(h0, [self.batch_size, 4, 4, 4*self.gf_dim*4], k_w=2, k_h=2, d_h=1, d_w=1, name='g_h1')
+            h1 = tf.depth_to_space(h1, 2)
             h1 = tf.nn.relu(self.g_bn1(h1, train=False))
 
-            h2 = deconv2d(h1, [self.batch_size, 16, 16, self.gf_dim*2], name='g_h2')
+            h2 = deconv2d(h1, [self.batch_size, 8, 8, 4*self.gf_dim*2], d_h=1, d_w=1,  name='g_h2')
+            h2 = tf.depth_to_space(h2, 2)
             h2 = tf.nn.relu(self.g_bn2(h2, train=False))
 
-            h3 = deconv2d(h2, [self.batch_size, 32, 32, self.gf_dim*1], name='g_h3')
+            h3 = deconv2d(h2, [self.batch_size, 16, 16, 4*self.gf_dim*1], d_h=1, d_w=1,  name='g_h3')
+            h3 = tf.depth_to_space(h3, 2)
             h3 = tf.nn.relu(self.g_bn3(h3, train=False))
 
-            h4 = deconv2d(h3, [self.batch_size, 64, 64, 3], name='g_h4')
+            h4 = deconv2d(h3, [self.batch_size, 32, 32, 4*3], d_h=1, d_w=1,  name='g_h4')
+            h4 = tf.depth_to_space(h4, 2)
 
             return tf.nn.tanh(h4)
         else:
